@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Рецепт — Простые рецепты</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+    <div class="container header-inner">
+        <a href="index.html" class="logo">
+            <div data-i18n="brand">Простые рецепты</div>
+            <span data-i18n="subtitle">Домашняя еда на каждый день</span>
+        </a>
+        <nav>
+            <a href="index.html" data-i18n="nav_home">Главная</a>
+            <a href="catalog.html" data-i18n="nav_catalog">Все рецепты</a>
+            <a href="profile.html" data-i18n="nav_profile">Кабинет</a>
+        </nav>
+        <div class="lang-switch">
+            <button class="lang-btn" data-lang="ru" onclick="App.setLang('ru')">RU</button>
+            <button class="lang-btn" data-lang="kz" onclick="App.setLang('kz')">KZ</button>
+            <button class="lang-btn" data-lang="en" onclick="App.setLang('en')">EN</button>
+        </div>
+    </div>
+</header>
+
+<main class="container section" id="recipeContainer"><p>Загрузка рецепта...</p></main>
+
+<footer>
+    <div class="container">© 2026 Простые рецепты</div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+    let currentRecipe = null;
+    let currentPortions = 2;
+
+    async function loadRecipe() {
+        await App.init();
+        const params = new URLSearchParams(window.location.search);
+        const id = Number(params.get('id'));
+
+        // Сначала ищем в стартовых, если нет — грузим из Supabase
+        currentRecipe = SEED_RECIPES.find(r => r.id === id);
+        if (!currentRecipe && id) {
+            const { data } = await sb.from('recipes').select('*').eq('id', id).single();
+            currentRecipe = data;
+        }
+        if (!currentRecipe) currentRecipe = SEED_RECIPES[0];
+
+        currentPortions = currentRecipe.base_portions || 2;
+        renderRecipePage();
+    }
+
+    function changePortions(delta) {
+        if (currentPortions + delta >= 1) {
+            currentPortions += delta;
+            renderRecipePage();
+        }
+    }
+
+    function startTimer(minutes, btn) {
+        let seconds = minutes * 60;
+        btn.disabled = true;
+        const interval = setInterval(() => {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            btn.textContent = `⏳ ${m}:${s < 10 ? '0' : ''}${s}`;
+            if (seconds <= 0) {
+                clearInterval(interval);
+                btn.textContent = '✅ Готово!';
+                alert('Таймер завершен!');
+            }
+            seconds--;
+        }, 1000);
+    }
+
+    function renderRecipePage() {
+        const lang = App.getLang();
+        const dict = I18N[lang];
+        const ratio = currentPortions / (currentRecipe.base_portions || 2);
+        const isFav = App.favIds.includes(Number(currentRecipe.id));
+
+        const title = currentRecipe.title[lang] || currentRecipe.title.ru;
+        const desc = currentRecipe.description[lang] || currentRecipe.description.ru;
+        const stepsList = currentRecipe.steps[lang] || currentRecipe.steps.ru;
+
+        const ingHtml = currentRecipe.ingredients.map(ing => {
+            const calcAmount = Math.round(ing.amount * ratio * 10) / 10;
+            const iName = ing.name[lang] || ing.name.ru;
+            const iUnit = ing.unit[lang] || ing.unit.ru;
+            return `<li><span>${iName}</span><strong>${calcAmount} ${iUnit}</strong></li>`;
+        }).join('');
+
+        const stepsHtml = stepsList.map((st, idx) => `
+            <div class="step-card">
+                <div><strong>${idx + 1}.</strong> ${st.text}</div>
+                ${st.timer > 0 ? `<button class="btn btn-outline" onclick="startTimer(${st.timer}, this)">⏱ ${st.timer} ${dict.time_min}</button>` : ''}
+            </div>
+        `).join('');
+
+        document.getElementById('recipeContainer').innerHTML = `
+            <div class="recipe-header">
+                <img src="${currentRecipe.image_url}" alt="${title}">
+                <div>
+                    <h1>${title}</h1>
+                    <p style="color: var(--text-muted); margin: 12px 0;">${desc}</p>
+                    <div>⏱ ${currentRecipe.time} ${dict.time_min} ${currentRecipe.author_email ? `• Автор: ${currentRecipe.author_email.split('@')[0]}` : ''}</div>
+                    
+                    <div class="portion-control">
+                        <span>${dict.portions}</span>
+                        <button onclick="changePortions(-1)">-</button>
+                        <strong>${currentPortions}</strong>
+                        <button onclick="changePortions(1)">+</button>
+                    </div>
+                    <br>
+                    <button class="btn ${isFav ? 'btn-accent' : ''}" onclick="App.toggleFavorite(${currentRecipe.id}, this)">
+                        ${isFav ? dict.in_fav : dict.add_fav}
+                    </button>
+                </div>
+            </div>
+
+            <div class="ad-slot">
+                <span>${dict.ad_label}</span>
+                <strong>Рекламный блок / Партнерская ссылка на продукты</strong>
+            </div>
+
+            <h2 style="margin-bottom: 12px;">${dict.ingredients}</h2>
+            <ul class="ing-list">${ingHtml}</ul>
+
+            <h2 style="margin-bottom: 12px;">${dict.steps}</h2>
+            ${stepsHtml}
+        `;
+    }
+
+    document.addEventListener('DOMContentLoaded', loadRecipe);
+</script>
+</body>
+</html>

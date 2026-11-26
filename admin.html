@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Модерация рецептов — Простые рецепты</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+    <div class="container header-inner">
+        <a href="index.html" class="logo">
+            <div data-i18n="brand">Простые рецепты</div>
+            <span>Панель администратора</span>
+        </a>
+        <nav>
+            <a href="index.html" data-i18n="nav_home">Главная</a>
+            <a href="catalog.html" data-i18n="nav_catalog">Все рецепты</a>
+            <a href="profile.html" data-i18n="nav_profile">Кабинет</a>
+        </nav>
+    </div>
+</header>
+
+<main class="container section">
+    <h1 style="margin-bottom: 20px;">Рецепты на проверке</h1>
+    <div class="grid" id="pendingGrid"><p>Проверка прав доступа...</p></div>
+</main>
+
+<footer>
+    <div class="container">© 2026 Простые рецепты</div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+    async function initAdmin() {
+        await App.init();
+        if (!App.user || App.user.email !== SUPABASE_CONFIG.ADMIN_EMAIL) {
+            document.getElementById('pendingGrid').innerHTML = '<p>Доступ запрещен. Войдите под аккаунтом администратора.</p>';
+            return;
+        }
+        loadPending();
+    }
+
+    async function loadPending() {
+        const { data, error } = await sb
+            .from('recipes')
+            .select('*')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+
+        const grid = document.getElementById('pendingGrid');
+        if (error || !data || data.length === 0) {
+            grid.innerHTML = '<p>Новых рецептов на модерацию пока нет.</p>';
+            return;
+        }
+
+        grid.innerHTML = data.map(r => `
+            <article class="card">
+                <img src="${r.image_url}" alt="${r.title.ru}">
+                <div class="card-body">
+                    <div class="card-meta">
+                        <span>Автор: ${r.author_email}</span>
+                        <span>⏱ ${r.time} мин</span>
+                    </div>
+                    <div class="card-title">${r.title.ru}</div>
+                    <p class="card-desc">${r.description.ru}</p>
+                    <div class="card-footer">
+                        <button class="btn" onclick="approveRecipe(${r.id})">Опубликовать</button>
+                        <button class="btn btn-danger" onclick="deleteRecipe(${r.id})">Удалить</button>
+                    </div>
+                </div>
+            </article>
+        `).join('');
+    }
+
+    async function approveRecipe(id) {
+        await sb.from('recipes').update({ status: 'approved' }).eq('id', id);
+        loadPending();
+    }
+
+    async function deleteRecipe(id) {
+        if (confirm('Удалить этот рецепт безвозвратно?')) {
+            await sb.from('recipes').delete().eq('id', id);
+            loadPending();
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', initAdmin);
+</script>
+</body>
+</html>

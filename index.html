@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Простые рецепты — домашняя еда на каждый день</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+    <div class="container header-inner">
+        <a href="index.html" class="logo">
+            <div data-i18n="brand">Простые рецепты</div>
+            <span data-i18n="subtitle">Домашняя еда на каждый день</span>
+        </a>
+        <nav>
+            <a href="index.html" class="active" data-i18n="nav_home">Главная</a>
+            <a href="catalog.html" data-i18n="nav_catalog">Все рецепты</a>
+            <a href="profile.html" data-i18n="nav_profile">Кабинет</a>
+        </nav>
+        <div class="lang-switch">
+            <button class="lang-btn" data-lang="ru" onclick="App.setLang('ru')">RU</button>
+            <button class="lang-btn" data-lang="kz" onclick="App.setLang('kz')">KZ</button>
+            <button class="lang-btn" data-lang="en" onclick="App.setLang('en')">EN</button>
+        </div>
+    </div>
+</header>
+
+<section class="hero">
+    <div class="container">
+        <h1 data-i18n="hero_title">Что приготовить из того, что есть дома?</h1>
+        <p data-i18n="hero_sub">Отметьте продукты из холодильника — мы подберем подходящие блюда.</p>
+        
+        <div class="fridge-box">
+            <div class="ingredients-chips" id="fridgeChips"></div>
+            <button class="btn" onclick="findByFridge()" data-i18n="btn_find">Подобрать рецепты</button>
+            <button class="btn btn-outline" onclick="resetFridge()" data-i18n="btn_reset">Сбросить</button>
+        </div>
+    </div>
+</section>
+
+<main class="container section">
+    <div class="ad-slot">
+        <span data-i18n="ad_label">Реклама / Партнерский блок</span>
+        <strong>Место под рекламный баннер (Яндекс РСЯ / Google AdSense / Партнерка доставки)</strong>
+    </div>
+
+    <div class="grid" id="homeRecipesGrid"><p>Загрузка рецептов...</p></div>
+</main>
+
+<footer>
+    <div class="container">© 2026 Простые рецепты — Домашняя кулинария</div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+    let allRecipes = [];
+    let selectedIngredients = [];
+
+    async function initHome() {
+        await App.init();
+        const lang = App.getLang();
+        document.getElementById('fridgeChips').innerHTML = FRIDGE_INGREDIENTS.map(item => `
+            <div class="chip" onclick="toggleChip('${item.id}', this)">${item[lang]}</div>
+        `).join('');
+
+        allRecipes = await App.getApprovedRecipes();
+        renderList(allRecipes);
+    }
+
+    function toggleChip(id, el) {
+        el.classList.toggle('selected');
+        if (selectedIngredients.includes(id)) {
+            selectedIngredients = selectedIngredients.filter(i => i !== id);
+        } else {
+            selectedIngredients.push(id);
+        }
+    }
+
+    function findByFridge() {
+        if (selectedIngredients.length === 0) {
+            renderList(allRecipes);
+            return;
+        }
+        const matched = allRecipes
+            .map(r => {
+                const tags = r.tags || [];
+                const matches = tags.filter(t => selectedIngredients.includes(t)).length;
+                return { ...r, matches };
+            })
+            .filter(r => r.matches > 0)
+            .sort((a, b) => b.matches - a.matches);
+
+        renderList(matched);
+    }
+
+    function resetFridge() {
+        selectedIngredients = [];
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+        renderList(allRecipes);
+    }
+
+    function renderList(list) {
+        const grid = document.getElementById('homeRecipesGrid');
+        grid.innerHTML = list.length
+            ? list.map(r => App.renderRecipeCard(r)).join('')
+            : '<p>По выбранным продуктам рецептов пока нет.</p>';
+    }
+
+    document.addEventListener('DOMContentLoaded', initHome);
+</script>
+</body>
+</html>

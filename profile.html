@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Личный кабинет — Простые рецепты</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+    <div class="container header-inner">
+        <a href="index.html" class="logo">
+            <div data-i18n="brand">Простые рецепты</div>
+            <span data-i18n="subtitle">Домашняя еда на каждый день</span>
+        </a>
+        <nav>
+            <a href="index.html" data-i18n="nav_home">Главная</a>
+            <a href="catalog.html" data-i18n="nav_catalog">Все рецепты</a>
+            <a href="profile.html" class="active" data-i18n="nav_profile">Кабинет</a>
+        </nav>
+        <div class="lang-switch">
+            <button class="lang-btn" data-lang="ru" onclick="App.setLang('ru')">RU</button>
+            <button class="lang-btn" data-lang="kz" onclick="App.setLang('kz')">KZ</button>
+            <button class="lang-btn" data-lang="en" onclick="App.setLang('en')">EN</button>
+        </div>
+    </div>
+</header>
+
+<main class="container section">
+    <!-- Блок авторизации -->
+    <div class="fridge-box" style="margin-bottom: 30px;" id="authSection"></div>
+
+    <!-- Контент для авторизованных пользователей -->
+    <div id="userDashboard" style="display: none;">
+        <h2 data-i18n="tab_fav" style="margin-bottom: 16px;">Мои избранные рецепты</h2>
+        <div class="grid" id="favGrid" style="margin-bottom: 40px;"></div>
+
+        <h2 style="margin-bottom: 16px;">Мои опубликованные рецепты</h2>
+        <div class="grid" id="myRecipesGrid" style="margin-bottom: 40px;"></div>
+
+        <div class="fridge-box">
+            <h2 data-i18n="tab_add" style="margin-bottom: 16px;">Опубликовать свой рецепт</h2>
+            <form onsubmit="submitRecipe(event)" id="recipeForm">
+                <div class="form-group">
+                    <label>Название блюда</label>
+                    <input type="text" id="rTitle" required placeholder="Например: Картофельная запеканка с курицей">
+                </div>
+                <div class="form-group">
+                    <label>Фотография готового блюда</label>
+                    <input type="file" id="rImage" accept="image/*">
+                </div>
+                <div class="form-group">
+                    <label>Категория</label>
+                    <select id="rCat">
+                        <option value="breakfast">Завтраки</option>
+                        <option value="lunch">Обеды и супы</option>
+                        <option value="dinner" selected>Ужины</option>
+                        <option value="grill">Мангал и мясо</option>
+                        <option value="preserve">Заготовки</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Основные продукты (отметьте для поиска «Что в холодильнике»)</label>
+                    <div class="ingredients-chips" id="formTags"></div>
+                </div>
+                <div class="form-group">
+                    <label>Время готовки (минут)</label>
+                    <input type="number" id="rTime" value="30" required>
+                </div>
+                <div class="form-group">
+                    <label>Краткое описание</label>
+                    <textarea id="rDesc" rows="2" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Ингредиенты (каждый с новой строки: Название - количество - ед.изм)</label>
+                    <textarea id="rIngs" rows="4" required placeholder="Картофель - 500 - г&#10;Курица - 300 - г&#10;Лук - 1 - шт"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Шаги приготовления (каждый шаг с новой строки)</label>
+                    <textarea id="rSteps" rows="4" required placeholder="Нарезать картофель и курицу.&#10;Запекать 30 минут при 180 градусах."></textarea>
+                </div>
+                <button type="submit" class="btn" id="submitBtn">Отправить на публикацию</button>
+            </form>
+        </div>
+    </div>
+</main>
+
+<footer>
+    <div class="container">© 2026 Простые рецепты</div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+    let selectedTags = [];
+
+    async function initProfile() {
+        await App.init();
+        const authBox = document.getElementById('authSection');
+        const dashboard = document.getElementById('userDashboard');
+
+        if (!App.user) {
+            dashboard.style.display = 'none';
+            authBox.innerHTML = `
+                <h2 style="margin-bottom: 12px;">Вход и регистрация</h2>
+                <p style="color: var(--text-muted); margin-bottom: 16px;">Войдите, чтобы сохранять рецепты в избранное и делиться своими блюдами со всеми посетителями сайта.</p>
+                <div style="display: grid; gap: 12px; max-width: 400px;">
+                    <input type="email" id="authEmail" placeholder="Ваш Email" style="padding: 10px; border: 1px solid var(--border); border-radius: 8px;">
+                    <input type="password" id="authPass" placeholder="Пароль (минимум 6 символов)" style="padding: 10px; border: 1px solid var(--border); border-radius: 8px;">
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="handleSignIn()">Войти</button>
+                        <button class="btn btn-outline" onclick="handleSignUp()">Регистрация</button>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        // Пользователь авторизован
+        dashboard.style.display = 'block';
+        authBox.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div><strong>👤 ${App.user.email}</strong></div>
+                <button class="btn btn-outline" onclick="handleSignOut()">${I18N[App.getLang()].btn_logout}</button>
+            </div>
+        `;
+
+        // Рендер тегов продуктов для формы
+        const lang = App.getLang();
+        document.getElementById('formTags').innerHTML = FRIDGE_INGREDIENTS.map(item => `
+            <div class="chip" onclick="toggleFormTag('${item.id}', this)">${item[lang]}</div>
+        `).join('');
+
+        await loadUserData();
+    }
+
+    function toggleFormTag(id, el) {
+        el.classList.toggle('selected');
+        if (selectedTags.includes(id)) {
+            selectedTags = selectedTags.filter(t => t !== id);
+        } else {
+            selectedTags.push(id);
+        }
+    }
+
+    async function handleSignIn() {
+        const email = document.getElementById('authEmail').value;
+        const password = document.getElementById('authPass').value;
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) alert('Ошибка входа: ' + error.message);
+        else location.reload();
+    }
+
+    async function handleSignUp() {
+        const email = document.getElementById('authEmail').value;
+        const password = document.getElementById('authPass').value;
+        const { error } = await sb.auth.signUp({ email, password });
+        if (error) alert('Ошибка регистрации: ' + error.message);
+        else {
+            alert('Регистрация прошла успешно!');
+            location.reload();
+        }
+    }
+
+    async function handleSignOut() {
+        await sb.auth.signOut();
+        location.reload();
+    }
+
+    async function loadUserData() {
+        // Избранное
+        const allApproved = await App.getApprovedRecipes();
+        const favRecipes = allApproved.filter(r => App.favIds.includes(Number(r.id)));
+        document.getElementById('favGrid').innerHTML = favRecipes.length
+            ? favRecipes.map(r => App.renderRecipeCard(r)).join('')
+            : '<p style="color:var(--text-muted);">У вас пока нет избранных рецептов.</p>';
+
+        // Мои отправленные рецепты
+        const { data: myRecipes } = await sb
+            .from('recipes')
+            .select('*')
+            .eq('author_email', App.user.email)
+            .order('created_at', { ascending: false });
+
+        document.getElementById('myRecipesGrid').innerHTML = (myRecipes && myRecipes.length)
+            ? myRecipes.map(r => `
+                <article class="card">
+                    <img src="${r.image_url}" alt="${r.title.ru}">
+                    <div class="card-body">
+                        <div style="margin-bottom:8px;">
+                            <span class="badge ${r.status === 'approved' ? 'badge-approved' : 'badge-pending'}">
+                                ${r.status === 'approved' ? 'Опубликован' : 'На проверке модератора'}
+                            </span>
+                        </div>
+                        <div class="card-title">${r.title.ru}</div>
+                        <p class="card-desc">${r.description.ru}</p>
+                    </div>
+                </article>
+            `).join('')
+            : '<p style="color:var(--text-muted);">Вы еще не добавляли свои рецепты.</p>';
+    }
+
+    async function submitRecipe(e) {
+        e.preventDefault();
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.textContent = 'Загрузка фото и сохранение...';
+
+        try {
+            const file = document.getElementById('rImage').files[0];
+            const imageUrl = await App.uploadImage(file);
+
+            const title = document.getElementById('rTitle').value;
+            const desc = document.getElementById('rDesc').value;
+            const rawIngs = document.getElementById('rIngs').value.split('\n').filter(Boolean);
+            const rawSteps = document.getElementById('rSteps').value.split('\n').filter(Boolean);
+
+            const parsedIngs = rawIngs.map(line => {
+                const parts = line.split('-').map(s => s.trim());
+                const name = parts[0] || line;
+                const amount = parseFloat(parts[1]) || 1;
+                const unit = parts[2] || 'шт';
+                return {
+                    name: { ru: name, kz: name, en: name },
+                    amount: amount,
+                    unit: { ru: unit, kz: unit, en: unit }
+                };
+            });
+
+            const parsedSteps = rawSteps.map(text => ({ text, timer: 0 }));
+
+            const { error } = await sb.from('recipes').insert({
+                author_email: App.user.email,
+                category: document.getElementById('rCat').value,
+                time: Number(document.getElementById('rTime').value),
+                base_portions: 2,
+                image_url: imageUrl,
+                tags: selectedTags,
+                title: { ru: title, kz: title, en: title },
+                description: { ru: desc, kz: desc, en: desc },
+                ingredients: parsedIngs,
+                steps: { ru: parsedSteps, kz: parsedSteps, en: parsedSteps },
+                status: 'pending'
+            });
+
+            if (error) throw error;
+
+            alert('Рецепт отправлен! После проверки модератором он появится в общем каталоге.');
+            document.getElementById('recipeForm').reset();
+            selectedTags = [];
+            document.querySelectorAll('#formTags .chip').forEach(c => c.classList.remove('selected'));
+            await loadUserData();
+        } catch (err) {
+            alert('Ошибка при сохранении: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Отправить на публикацию';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', initProfile);
+</script>
+</body>
+</html>

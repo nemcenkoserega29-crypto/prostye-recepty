@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каталог рецептов — Простые рецепты</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<header>
+    <div class="container header-inner">
+        <a href="index.html" class="logo">
+            <div data-i18n="brand">Простые рецепты</div>
+            <span data-i18n="subtitle">Домашняя еда на каждый день</span>
+        </a>
+        <nav>
+            <a href="index.html" data-i18n="nav_home">Главная</a>
+            <a href="catalog.html" class="active" data-i18n="nav_catalog">Все рецепты</a>
+            <a href="profile.html" data-i18n="nav_profile">Кабинет</a>
+        </nav>
+        <div class="lang-switch">
+            <button class="lang-btn" data-lang="ru" onclick="App.setLang('ru')">RU</button>
+            <button class="lang-btn" data-lang="kz" onclick="App.setLang('kz')">KZ</button>
+            <button class="lang-btn" data-lang="en" onclick="App.setLang('en')">EN</button>
+        </div>
+    </div>
+</header>
+
+<main class="container section">
+    <div class="fridge-box" style="margin-bottom: 28px;">
+        <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+            <input type="text" id="searchInput" placeholder="Поиск по названию или описанию..." oninput="filterCatalog()" style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid var(--border); border-radius: 8px;">
+            
+            <select id="categoryFilter" onchange="filterCatalog()" style="padding: 10px; border: 1px solid var(--border); border-radius: 8px;">
+                <option value="all" data-i18n="cat_all">Все категории</option>
+                <option value="breakfast" data-i18n="cat_breakfast">Завтраки</option>
+                <option value="lunch" data-i18n="cat_lunch">Обеды и супы</option>
+                <option value="dinner" data-i18n="cat_dinner">Ужины</option>
+                <option value="grill" data-i18n="cat_grill">Мангал и мясо</option>
+                <option value="preserve" data-i18n="cat_preserve">Заготовки</option>
+            </select>
+
+            <select id="timeFilter" onchange="filterCatalog()" style="padding: 10px; border: 1px solid var(--border); border-radius: 8px;">
+                <option value="999">Любое время</option>
+                <option value="20">До 20 мин</option>
+                <option value="30">До 30 мин</option>
+                <option value="45">До 45 мин</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="grid" id="catalogGrid"><p>Загрузка...</p></div>
+</main>
+
+<footer>
+    <div class="container">© 2026 Простые рецепты</div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+<script>
+    let allRecipes = [];
+
+    async function initCatalog() {
+        await App.init();
+        allRecipes = await App.getApprovedRecipes();
+        filterCatalog();
+    }
+
+    function filterCatalog() {
+        const lang = App.getLang();
+        const query = document.getElementById('searchInput').value.toLowerCase();
+        const cat = document.getElementById('categoryFilter').value;
+        const maxTime = Number(document.getElementById('timeFilter').value);
+
+        const filtered = allRecipes.filter(r => {
+            const title = (r.title[lang] || r.title.ru).toLowerCase();
+            const desc = (r.description[lang] || r.description.ru).toLowerCase();
+            const matchText = title.includes(query) || desc.includes(query);
+            const matchCat = cat === 'all' || r.category === cat;
+            const matchTime = r.time <= maxTime;
+            return matchText && matchCat && matchTime;
+        });
+
+        document.getElementById('catalogGrid').innerHTML = filtered.map(r => App.renderRecipeCard(r)).join('');
+    }
+
+    document.addEventListener('DOMContentLoaded', initCatalog);
+</script>
+</body>
+</html>
